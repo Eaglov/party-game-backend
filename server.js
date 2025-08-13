@@ -12,32 +12,40 @@ const questions = JSON.parse(fs.readFileSync('questions_40_1.json', 'utf8'));
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server, {
+  cors: {
+    origin: "https://game-front-two.vercel.app", // твой фронт
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
 
 app.use(cors());
 app.use(bodyParser.json());
 
 const PORT = process.env.PORT || 3000;
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const BASE_URL = process.env.BASE_URL;
+const BASE_URL = "https://game-front-two.vercel.app"; // твой фронт
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// При старте бота отправляем ссылку на фронт (Vercel)
 bot.start((ctx) => {
   ctx.reply('Welcome! Click below to open the game.', {
     reply_markup: {
-      inline_keyboard: [[{ text: 'Open Party Game', web_app: { url: `${BASE_URL}` } }]]
+      inline_keyboard: [[{ text: 'Open Party Game', web_app: { url: `${BASE_URL}/webapp.html` } }]]
     }
   });
 });
 
 let rooms = {};
 
-// Логика подключения игроков
 io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+
   socket.on('joinRoom', ({ roomId, playerName }) => {
+    console.log('joinRoom', roomId, playerName);
+
     socket.join(roomId);
     if (!rooms[roomId]) {
       rooms[roomId] = { players: [], questions: [], answers: [] };
