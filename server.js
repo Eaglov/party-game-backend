@@ -23,7 +23,7 @@ const io = new Server(server, {
 app.use(cors());
 app.use(bodyParser.json());
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const BASE_URL = "https://game-front-two.vercel.app"; // твой фронт
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
