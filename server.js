@@ -59,3 +59,28 @@ server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   bot.launch();
 });
+
+const rooms = {}; // { roomId: { players: [] } }
+
+io.on('connection', (socket) => {
+    console.log("Client connected:", socket.id);
+
+    socket.on('joinRoom', ({ roomId, playerName }) => {
+        console.log("joinRoom", roomId, playerName);
+
+        if (!rooms[roomId]) {
+            rooms[roomId] = { players: [] };
+        }
+        rooms[roomId].players.push({ id: socket.id, name: playerName });
+        socket.join(roomId);
+
+        io.to(roomId).emit('roomJoined', rooms[roomId].players);
+        io.to(roomId).emit('playerListUpdate', rooms[roomId].players);
+    });
+
+    socket.on('startGame', (roomId) => {
+        console.log("startGame triggered for room:", roomId);
+        const question = "Какой-то тестовый вопрос"; // здесь можно грузить из файла
+        io.to(roomId).emit('gameStarted', { question });
+    });
+});
