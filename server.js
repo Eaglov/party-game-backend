@@ -12,7 +12,15 @@ const ROUND_TIME_MS = 60_000;   // 60 секунд на сбор ответов
 const VOTE_STEP_TIMEOUT_MS = 30_000; // таймаут на шаг голосования (чтобы не зависало)
 const TOTAL_ROUNDS = 3;
 const ALLOWED_EMOJIS = ['😂', '🙂', '💩'];
+const bot = new Telegraf(BOT_TOKEN);
 
+bot.start((ctx) => {
+  ctx.reply('Welcome! Click below to open the game.', {
+    reply_markup: {
+      inline_keyboard: [[{ text: 'Open Party Game', web_app: { url: `${BASE_URL}/webapp.html` } }]]
+    }
+  });
+});
 // Простейший банк вопросов (замени на свой или загрузку из файла)
 const QUESTIONS_BANK = [
   "Самая нелепая ситуация в вашей жизни?",
