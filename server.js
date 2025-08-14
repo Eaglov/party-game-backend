@@ -38,28 +38,6 @@ bot.start((ctx) => {
   });
 });
 
-let rooms = {};
-
-io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-
-  socket.on('joinRoom', ({ roomId, playerName }) => {
-    console.log('joinRoom', roomId, playerName);
-
-    socket.join(roomId);
-    if (!rooms[roomId]) {
-      rooms[roomId] = { players: [], questions: [], answers: [] };
-    }
-    rooms[roomId].players.push({ id: socket.id, name: playerName });
-    io.to(roomId).emit('updatePlayers', rooms[roomId].players);
-  });
-});
-
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  bot.launch();
-});
-
 const rooms = {}; // { roomId: { players: [] } }
 
 io.on('connection', (socket) => {
@@ -84,3 +62,25 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('gameStarted', { question });
     });
 });
+
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+
+  socket.on('joinRoom', ({ roomId, playerName }) => {
+    console.log('joinRoom', roomId, playerName);
+
+    socket.join(roomId);
+    if (!rooms[roomId]) {
+      rooms[roomId] = { players: [], questions: [], answers: [] };
+    }
+    rooms[roomId].players.push({ id: socket.id, name: playerName });
+    io.to(roomId).emit('updatePlayers', rooms[roomId].players);
+  });
+});
+
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  bot.launch();
+});
+
+
