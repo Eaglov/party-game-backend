@@ -4,26 +4,19 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 
 // ====== КОНСТАНТЫ ======
 const FRONT_ORIGIN = "https://game-front-two.vercel.app";
 const PORT = process.env.PORT || 10000;
-const BOT_TOKEN = process.env.BOT_TOKEN;
 const ROUND_TIME_MS = 60_000;   // 60 секунд на сбор ответов
 const VOTE_STEP_TIMEOUT_MS = 30_000; // таймаут на шаг голосования (чтобы не зависало)
 const TOTAL_ROUNDS = 3;
 const ALLOWED_EMOJIS = ['😂', '🙂', '💩'];
-const bot = new Telegraf(BOT_TOKEN);
 
-bot.start((ctx) => {
-  ctx.reply('Welcome! Click below to open the game.', {
-    reply_markup: {
-      inline_keyboard: [[{ text: 'Open Party Game', web_app: { url: `${BASE_URL}/webapp.html` } }]]
-    }
-  });
-});
-// Простейший банк вопросов (замени на свой или загрузку из файла)
-const QUESTIONS_BANK = [
+// ====== Загрузка банка вопросов ======
+let QUESTIONS_BANK = [
   "Самая нелепая ситуация в вашей жизни?",
   "Если бы вы стали супергероем на день — что бы сделали?",
   "Какую привычку вы хотели бы убрать у себя?",
@@ -31,9 +24,25 @@ const QUESTIONS_BANK = [
   "Самая странная еда, которую вы пробовали?",
   "Какой навык вы бы прокачали за одну ночь?"
 ];
+try {
+  const p = path.join(__dirname, 'questions_40_1.json');
+  if (fs.existsSync(p)) {
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    if (Array.isArray(data) && data.length) {
+      QUESTIONS_BANK = data;
+      console.log(`Loaded ${QUESTIONS_BANK.length} questions from questions_40_1.json`);
+    }
+  }
+} catch (e) {
+  console.warn("Failed to read questions_40_1.json, using fallback questions.");
+}
 
 const app = express();
 app.use(cors({ origin: FRONT_ORIGIN }));
+app.use(express.json());
+
+// healthcheck для Render
+app.get('/health', (req, res) => res.json({ ok: true }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -52,7 +61,7 @@ const io = new Server(server, {
 //     pairs: [ { members: [id1,id2], questions:[q1,q2],
 //                answers: { 0: { [playerId]: text }, 1: { [playerId]: text } },
 //                firstAnswerTimeMs: null } ],
-//     answersCount: 0,   // всего ответов получено в раунде
+//     answersCount: 0,
 //     totalExpectedAnswers: pairs.length * 2 /*вопроса*/ * 2 /*в паре игроков*/,
 //     roundTimer: Timeout,
 //     votingCursor: { pairIndex:0, qIndex:0 },
@@ -167,11 +176,13 @@ io.on('connection', (socket) => {
       const gotCount = Object.keys(pair.answers[qIndex]).length;
 
       if (qIndex === 0 && gotCount >= Math.min(2, needCount)) {
-        // выдать второй вопрос этой паре
-        io.to(pair.members).emit('showQuestion', {
-          pairIndex,
-          qIndex: 1,
-          question: pair.questions[1]
+        // выдать второй вопрос этой паре — рассылаем КАЖДОМУ участнику пары
+        pair.members.forEach(sid => {
+          io.to(sid).emit('showQuestion', {
+            pairIndex,
+            qIndex: 1,
+            question: pair.questions[1]
+          });
         });
       }
     }
@@ -264,8 +275,8 @@ function startRound(roomId) {
   const pairs = pairsRaw.map(pr => {
     // берём случайные вопросы
     const shuffled = shuffleArr(QUESTIONS_BANK);
-    const q1 = shuffled[0];
-    const q2 = shuffled[1];
+    const q1 = String(shuffled[0]);
+    const q2 = String(shuffled[1]);
     return {
       members: pr.members,
       questions: [q1, q2],
@@ -274,10 +285,7 @@ function startRound(roomId) {
     };
   });
 
-  // Счётчик ожидаемых ответов: по нашей механике — “2 игрока * 2 вопроса” на пару.
-  // Если пара из 3-х — всё равно ждём только 2 ответа (первые двое — строго?), но корректнее: ждём именно по 2 ответа на вопрос.
-  // Условие из задачи — пара; для нечётного количества допустим, что голосование и ответы идёт по двум участникам (первые двое).
-  // Чтобы не усложнять — ждём максимум 2 ответа на вопрос.
+  // Счётчик ожидаемых ответов
   let totalExpectedAnswers = 0;
   pairs.forEach(pr => { totalExpectedAnswers += 2 /*вопроса*/ * Math.min(2, pr.members.length); });
 
@@ -290,12 +298,14 @@ function startRound(roomId) {
     votes: {}
   };
 
-  // Отправляем ВОПРОС 1 всем парам сразу
+  // Отправляем ВОПРОС 1 всем парам сразу (каждому участнику пары)
   pairs.forEach((pair, pairIndex) => {
-    io.to(pair.members).emit('showQuestion', {
-      pairIndex,
-      qIndex: 0,
-      question: pair.questions[0]
+    pair.members.forEach(sid => {
+      io.to(sid).emit('showQuestion', {
+        pairIndex,
+        qIndex: 0,
+        question: pair.questions[0]
+      });
     });
   });
 
@@ -371,7 +381,6 @@ function emitVotingStep(roomId) {
   });
 
   // Таймер шага голосования (чтобы не зависло)
-  // Если за VOTE_STEP_TIMEOUT_MS не проголосовали все — считаем что шаг завершён
   if (!rd._voteStepTimer) {
     rd._voteStepTimer = setTimeout(() => {
       tallyVotesForStep(roomId, pairIndex, qIndex);
