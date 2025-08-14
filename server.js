@@ -8,6 +8,7 @@ const cors = require('cors');
 // ====== КОНСТАНТЫ ======
 const FRONT_ORIGIN = "https://game-front-two.vercel.app";
 const PORT = process.env.PORT || 10000;
+const BOT_TOKEN = process.env.BOT_TOKEN;
 const ROUND_TIME_MS = 60_000;   // 60 секунд на сбор ответов
 const VOTE_STEP_TIMEOUT_MS = 30_000; // таймаут на шаг голосования (чтобы не зависало)
 const TOTAL_ROUNDS = 3;
